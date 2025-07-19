@@ -8,12 +8,18 @@ import pygame
 class GridWorld(Env):
 
     def __init__(self, mapping, sto = False):
-        grid = np.zeros((7,10))
-        upwards = [0,0,0,1,1,1,2,2,1,0]
 
-        start = (3,0)
-        goal = (3,7)
-        cur_loc = start
+        self.size = 30  # Size of each grid cell in pixels
+        self.window_size = (10 * self.size, 7 * self.size)  # 10 columns, 7 rows
+        self.window = None
+        self.clock = None
+        
+        self.grid = np.zeros((7,10))
+        self.upward_dir = [[0,0],[0,0],[0,0],[-1,0],[-1,0],[-1,0],[-2,0],[-2,0],[-1,0],[0,0]]
+
+        self.start = (3,0)
+        self.goal = (3,7)
+        self.cur_loc = self.start
 
         self._action_to_direction = mapping
 
@@ -24,8 +30,84 @@ class GridWorld(Env):
         return None
     
     def reset(self):
-        cur_loc = self.start
+        self.cur_loc = self.start
+        return self._get_obs(), self._get_info()
 
     def step(self, action):
-        pass
+        direction = self._action_to_direction[action]
+        up = self.upward_dir[self.cur_loc[1]]
+        self.cur_loc += direction
+        self.cur_loc = np.clip(self.cur_loc + up, [0, 0], [6, 9])
+
+        terminated = True if all(self.cur_loc == self.goal) else False
+        reward = 0 if terminated else -1
+        return self._get_obs(), reward, terminated, False, self._get_info()
     
+    def render(self):
+        if self.window is None:
+            pygame.init()
+            self.window = pygame.display.set_mode(self.window_size)
+            pygame.display.set_caption('Windy Gridworld')
+        
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+        
+        # Fill background
+        self.window.fill((240, 240, 240))
+        
+        # Draw grid cells
+        for row in range(7):
+            for col in range(10):
+                rect = pygame.Rect(col * self.size, row * self.size, self.size, self.size)
+                
+                # Color start position
+                if (row, col) == self.start:
+                    pygame.draw.rect(self.window, (100, 200, 100), rect)  # Green
+                # Color goal position
+                elif (row, col) == self.goal:
+                    pygame.draw.rect(self.window, (200, 100, 100), rect)  # Red
+                # Regular cell
+                else:
+                    pygame.draw.rect(self.window, (255, 255, 255), rect)
+                
+                # Draw grid borders
+                pygame.draw.rect(self.window, (180, 180, 180), rect, 1)
+        
+        # Draw agent (as a blue circle)
+        agent_x = self.cur_loc[1] * self.size + self.size // 2
+        agent_y = self.cur_loc[0] * self.size + self.size // 2
+        pygame.draw.circle(self.window, (50, 50, 200), (agent_x, agent_y), self.size // 3)
+        
+        pygame.display.flip()
+        # Handle events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                self.window = None
+                return
+        self.clock.tick(120)  # Control rendering speed
+
+
+if __name__ == "__main__":
+    mapping = {
+        0: np.array([1, 0]),   # Down
+        1: np.array([0, 1]),   # Right
+        2: np.array([-1, 0]),  # Up
+        3: np.array([0, -1])   # Left
+    }
+    
+    agent = GridWorld(mapping)
+    observation, info = agent.reset()
+    
+    # For demo: take random actions
+    terminated = False
+    while not terminated:
+        action = np.random.randint(0, 4)  # Random action
+        words = ['Down', 'Right', 'Up', 'Left']
+        observation, reward, terminated, truncated, info = agent.step(action)
+        print("Turned: ", words[action], ", now at: ", observation["agent location"])
+        agent.render()
+        pygame.time.delay(100)  # Slow down for visualization
+        
+    pygame.quit()
+
