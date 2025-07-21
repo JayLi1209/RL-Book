@@ -7,7 +7,7 @@ import matplotlib.patches as patches
 EPSILON = 0.1
 ALPHA = 0.5
 GAMMA = 1
-EPISODES = 170
+EPISODES = 2000
 TS_TRUNCATE = 8000
 total_ts = 0
 cults_counts = []
@@ -41,10 +41,6 @@ king_mapping_no_moves = {
     7: np.array([-1, -1]),   # UpLeft
     8: np.array([0, 0]) # No move
 }
-
-agent = GridWorld.GridWorld(mapping, sto = False)
-
-Q = np.zeros((*agent.nS, agent.nA))
 
 def get_greedy_action(Q, cur_loc):
     return np.argmax(Q[cur_loc])
@@ -129,19 +125,25 @@ def get_optimal_trajectory(env, Q, max_steps=100):
     trajectory = [state]  # Start with initial state
     terminated = False
     step_count = 0
+    print("Start with ", state)
     
     while not terminated and step_count < max_steps:
         # Choose action with highest Q-value
         action = np.argmax(Q[state])
+        print("Avail actions are", Q[state], " pick ", action)
         next_state, reward, terminated, truncated, _ = env.step(action)
         trajectory.append(next_state)
         state = next_state
         step_count += 1
-        print("Optimal Trajectory: ", state)
+        print("next state: ", state)
     
     return trajectory
 
 if __name__ == "__main__":
+
+    agent = GridWorld.GridWorld(king_mapping, sto = False)
+    Q = np.zeros((*agent.nS, agent.nA)) # action space
+
     for i in range(EPISODES):
         print("Staring Episode: ", i)
         obs, _ = agent.reset()
@@ -149,7 +151,7 @@ if __name__ == "__main__":
         terminated = False
         cur_s = obs
 
-        while not terminated and total_ts <= TS_TRUNCATE:
+        while not terminated:
             agent.render()
             next_s, reward, terminated, truncated, _ = agent.step(cur_a)
             next_a = get_action(agent, Q, next_s)
@@ -162,8 +164,8 @@ if __name__ == "__main__":
         cults_counts.append(total_ts)
     
     # Plot the optimal graph plot:
+    print(Q)
     print("Start optimal trajectory: ")
     trajectory = get_optimal_trajectory(agent, Q)
-    
     plot_trajectory(trajectory)
     plot_ts_vs_episode()

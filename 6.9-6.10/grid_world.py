@@ -1,6 +1,4 @@
-# This defines the basic Windy Gridworld class
-
-# What do I need for an agent to do randomized walk?
+# Defines the basic Windy Gridworld class
 import numpy as np
 from gymnasium import Env
 import pygame
@@ -8,7 +6,8 @@ import pygame
 class GridWorld(Env):
 
     def __init__(self, mapping, sto = False):
-
+        
+        # pygame setup
         self.size = 30  # Size of each grid cell in pixels
         self.window_size = (10 * self.size, 7 * self.size)  # 10 columns, 7 rows
         self.window = None
@@ -35,26 +34,13 @@ class GridWorld(Env):
         self.cur_loc = self.start
         return self._get_obs(), self._get_info()
 
-    # def step(self, action):
-    #     direction = self._action_to_direction[action]
-    #     up = self.upward_dir[self.cur_loc[1]]
-    #     self.cur_loc += direction
-    #     self.cur_loc = np.clip(self.cur_loc + up, [0, 0], [6, 9])
-
-    #     terminated = True if all(self.cur_loc == self.goal) else False
-    #     reward = 0 if terminated else -1
-    #     return self._get_obs(), reward, terminated, False, self._get_info()
-
     def step(self, action):
         direction = self._action_to_direction[action]
-        new_loc = np.clip(self.cur_loc + direction, [0, 0], [6, 9])
-        # Apply wind from the NEW column
-        new_col = new_loc[1]
-        up = self.upward_dir[new_col]  # Now using destination column
-        new_loc = np.clip(new_loc + up, [0, 0], [6, 9])
-        self.cur_loc = new_loc
-        # Termination check remains the same
-        terminated = all(self.cur_loc == self.goal)
+        up = self.upward_dir[self.cur_loc[1]]
+        self.cur_loc += direction
+        self.cur_loc = np.clip(self.cur_loc + up, [0, 0], [6, 9])
+
+        terminated = True if all(self.cur_loc == self.goal) else False
         reward = 0 if terminated else -1
         return self._get_obs(), reward, terminated, False, self._get_info()
     
