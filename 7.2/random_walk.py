@@ -152,7 +152,7 @@ class RandomWalk(Env):
                 return
         
         # Control rendering speed
-        self.clock.tick(50)
+        self.clock.tick(100)
 
 def plot(data):
     groups = ['A', 'B', 'C', 'D', 'E']  # Group labels
@@ -221,6 +221,3 @@ if __name__ == "__main__":
         print("Values:", values[1], values[2], values[3], values[4], values[5])
     
     plot(data)
-    
-
-        
