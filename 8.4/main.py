@@ -81,6 +81,14 @@ def get_random_state_action(agent, history):
             action_index = random.randint(0, length-1)
             return (row, col), history[(row, col)][action_index]
 
+
+def get_random_state_action_plus(agent, history):
+    row = random.randint(0, agent.nS[0]-1)
+    col = random.randint(0, agent.nS[1]-1)
+    action = random.randint(0, 4)
+    length = len(history[(row, col)])
+    return (row, col), action, length == 0
+
 def get_reward_ts_plot(time_steps, rewards, reward_dyna_q_plus):
     # Plot cumulative reward vs. time steps
     plt.figure(figsize=(10, 5))
@@ -103,7 +111,6 @@ def get_reward_ts_plot(time_steps, rewards, reward_dyna_q_plus):
 
 
 if __name__ == "__main__":
-
     agent = MazeWorld.MazeWorld(mapping,sto = False)
     Q = np.zeros((*agent.nS, agent.nA)) # action space
     model = DynaQModel()
@@ -132,8 +139,6 @@ if __name__ == "__main__":
             next_a_val, next_a = get_max_action(Q, next_s)
             Q[cur_s][cur_a] = Q[cur_s][cur_a] + ALPHA * (reward + GAMMA * next_a_val - Q[cur_s][cur_a])
             history[tuple(cur_s)].append(cur_a)
-            reward_q_plus = reward + k * math.sqrt(total_ts - ts_history[tuple(cur_s)][cur_a])
-            ts_history[tuple(cur_s)][cur_a] = total_ts
             model.update(cur_s, cur_a, reward, next_s)
 
             # print("reward", reward, cur_s)
@@ -159,4 +164,67 @@ if __name__ == "__main__":
     # print(c_r)
     get_reward_ts_plot(cults_counts, reward_counts)
 
+
+
+
+
+    ##### Dyna-Q+ #######
+    agent = MazeWorld.MazeWorld(mapping,sto = False)
+    Q = np.zeros((*agent.nS, agent.nA)) # action space
+    model = DynaQModel()
+    history = initialize_history(agent)
+    ts_history = np.zeros((*agent.nS, agent.nA)) # For Dyna-Q+: how often has it been visited?
+
+    change = False # switch maze?
+    for i in range(EPISODES):
+        if total_ts >= TS_TRUNCATE:
+            break
+
+        if total_ts >= CHANGE_TS:
+            change = True
+        print("Staring Episode: ", i)
+        obs, _ = agent.reset()
+        cur_a = get_action(agent, Q, obs)
+        terminated = False
+        cur_s = obs
+        # print(history)
+        # print(cur_s)
+        tmp_ts = 0
+
+        while not terminated:
+            # agent.render()
+            next_s, reward, terminated, truncated, _ = agent.step(cur_a, change)
+            next_a_val, next_a = get_max_action(Q, next_s)
+            Q[cur_s][cur_a] = Q[cur_s][cur_a] + ALPHA * (reward + GAMMA * next_a_val - Q[cur_s][cur_a])
+            history[tuple(cur_s)].append(cur_a)
+            # reward_q_plus = reward + k * math.sqrt(total_ts - ts_history[tuple(cur_s)][cur_a])
+            ts_history[tuple(cur_s)][cur_a] = total_ts
+            model.update(cur_s, cur_a, reward, next_s)
+
+            # print("reward", reward, cur_s)
+            for j in range(N):
+                rand_s, rand_a, is_hist = get_random_state_action_plus(agent, history)
+                pred_r, pred_s = model.predict(rand_s, rand_a)
+                if is_hist:
+                    pred_s = rand_s
+                    pred_r = 0
+                reward_q_plus = pred_r + k * math.sqrt(total_ts - ts_history[tuple(rand_s)][rand_a])
+                next_pred_a_val, _ = get_max_action(Q, pred_s)
+                Q[rand_s][rand_a] = Q[rand_s][rand_a] + ALPHA * (reward_q_plus + GAMMA * next_pred_a_val - Q[rand_s][rand_a])
+
+            c_r += reward
+            cur_s = next_s
+            cur_a = next_a
+            total_ts += 1
+            tmp_ts += 1            
+        
+        c_r += tmp_ts
+        c_r -= 1
+        print("Total timestep consumed: ", total_ts, "reward: ", c_r)
+        cults_counts.append(total_ts)
+        reward_counts.append(c_r)
+
+    # print(total_ts)
+    # print(c_r)
+    get_reward_ts_plot(cults_counts, reward_counts)
 
