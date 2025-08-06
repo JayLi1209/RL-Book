@@ -11,13 +11,17 @@ EPISODES = 2000 # Alternative way to control runtime
 TS_TRUNCATE = 3000 
 CHANGE_TS = 1000 # Where to switch course
 total_ts = 0
-N = 25 # Number of planning steps
+N = 50 # Number of planning steps
 cults_counts = []
 reward_counts = []
+cc = [] # culmulative timestep for Dyna-Q+
+rc = [] # culmulative reward for Dyna-Q+
+cc2 = []
+rc2 = []
 c_r = 0 # culmultive reward for plotting
 k = 0.1 # The Dyna-Q+ parameter
 
-
+# All actions to directions
 mapping = {
     0: np.array([1, 0]),   # Down
     1: np.array([0, 1]),   # Right
@@ -34,6 +38,16 @@ def get_max_action(Q, next_s):
     for i in range(len(Q[next_s])):
         if Q[next_s][i] > max_num:
             max_num = Q[next_s][i]
+            max_a = i
+
+    return max_num, max_a
+
+def get_max_action_plus(Q, next_s, ts_history, total_ts):
+    max_num = -math.inf
+    max_a = 0
+    for i in range(len(Q[next_s])):
+        if Q[next_s][i] + k * math.sqrt(total_ts - ts_history[next_s][i]) > max_num:
+            max_num = Q[next_s][i] + k * math.sqrt(total_ts - ts_history[next_s][i])
             max_a = i
 
     return max_num, max_a
@@ -85,29 +99,30 @@ def get_random_state_action(agent, history):
 def get_random_state_action_plus(agent, history):
     row = random.randint(0, agent.nS[0]-1)
     col = random.randint(0, agent.nS[1]-1)
-    action = random.randint(0, 4)
-    length = len(history[(row, col)])
-    return (row, col), action, length == 0
+    action = random.randint(0, 3)
+    visited = action in history[(row, col)] 
+    return (row, col), action, visited
 
-def get_reward_ts_plot(time_steps, rewards, reward_dyna_q_plus):
-    # Plot cumulative reward vs. time steps
-    plt.figure(figsize=(10, 5))
-    plt.plot(time_steps, rewards, label="Dyna-Q", color="blue", linewidth=2)
-    plt.plot(time_steps, reward_dyna_q_plus, label="Dyna-Q+", color="red", linewidth=2)
+def get_reward_ts_plot(ts1, ts2, r1, r2):
+    # Create plot
+    plt.figure(figsize=(10, 6))
 
+    # Plot both datasets
+    plt.plot(ts1, r1, label='Dyna-Q+ with action value updates', linewidth=2, markersize=8)
+    plt.plot(ts2, r2, label='Dyna-Q+', linewidth=2, markersize=8)
 
-    # Customize the plot
-    plt.xlabel("Time Steps", fontsize=12)
-    plt.ylabel("Cumulative Reward", fontsize=12)
-    plt.title("Cumulative Reward Over Time Steps", fontsize=14)
-    plt.grid(True, linestyle="--", alpha=0.7)
-    plt.legend(fontsize=12)
+    # Add labels and title
+    plt.xlabel('Time Steps', fontsize=12)
+    plt.ylabel('Cumulative Reward', fontsize=12)
+    plt.title('Cumulative Reward vs Time Steps', fontsize=14)
+
+    # Add legend and grid
+    plt.legend(fontsize=10)
+    plt.grid(True, linestyle='--', alpha=0.7)
+
+    # Improve layout and show plot
     plt.tight_layout()
-
-    # Save or display
-    plt.savefig("8.4/cumulative_reward.png", dpi=300)  # Save as PNG
     plt.show()
-
 
 
 if __name__ == "__main__":
@@ -129,8 +144,6 @@ if __name__ == "__main__":
         cur_a = get_action(agent, Q, obs)
         terminated = False
         cur_s = obs
-        # print(history)
-        # print(cur_s)
         tmp_ts = 0
 
         while not terminated:
@@ -160,16 +173,12 @@ if __name__ == "__main__":
         cults_counts.append(total_ts)
         reward_counts.append(c_r)
 
-    # print(total_ts)
-    # print(c_r)
-    get_reward_ts_plot(cults_counts, reward_counts)
-
-
-
 
 
     ##### Dyna-Q+ #######
-    agent = MazeWorld.MazeWorld(mapping,sto = False)
+    total_ts = 0
+    c_r = 0
+    agent = MazeWorld.MazeWorld(mapping, sto = False)
     Q = np.zeros((*agent.nS, agent.nA)) # action space
     model = DynaQModel()
     history = initialize_history(agent)
@@ -187,8 +196,6 @@ if __name__ == "__main__":
         cur_a = get_action(agent, Q, obs)
         terminated = False
         cur_s = obs
-        # print(history)
-        # print(cur_s)
         tmp_ts = 0
 
         while not terminated:
@@ -203,11 +210,11 @@ if __name__ == "__main__":
 
             # print("reward", reward, cur_s)
             for j in range(N):
-                rand_s, rand_a, is_hist = get_random_state_action_plus(agent, history)
-                pred_r, pred_s = model.predict(rand_s, rand_a)
-                if is_hist:
-                    pred_s = rand_s
-                    pred_r = 0
+                rand_s, rand_a, visited = get_random_state_action_plus(agent, history)
+                pred_r = 0
+                pred_s = rand_s
+                if visited: # has been visited
+                    pred_r, pred_s = model.predict(rand_s, rand_a)
                 reward_q_plus = pred_r + k * math.sqrt(total_ts - ts_history[tuple(rand_s)][rand_a])
                 next_pred_a_val, _ = get_max_action(Q, pred_s)
                 Q[rand_s][rand_a] = Q[rand_s][rand_a] + ALPHA * (reward_q_plus + GAMMA * next_pred_a_val - Q[rand_s][rand_a])
@@ -221,10 +228,77 @@ if __name__ == "__main__":
         c_r += tmp_ts
         c_r -= 1
         print("Total timestep consumed: ", total_ts, "reward: ", c_r)
-        cults_counts.append(total_ts)
-        reward_counts.append(c_r)
+        cc.append(total_ts)
+        rc.append(c_r)
 
     # print(total_ts)
     # print(c_r)
-    get_reward_ts_plot(cults_counts, reward_counts)
+    # print(len(cults_counts), len(reward_counts), len(rc))
+    # get_reward_ts_plot(cults_counts, cc, reward_counts, rc)
+
+
+
+
+
+
+
+    ##### Dyna-Q+ with action value updates#######
+    total_ts = 0
+    c_r = 0
+    agent = MazeWorld.MazeWorld(mapping, sto = False)
+    Q = np.zeros((*agent.nS, agent.nA)) # action space
+    model = DynaQModel()
+    history = initialize_history(agent)
+    ts_history = np.zeros((*agent.nS, agent.nA)) # For Dyna-Q+: how often has it been visited?
+
+    change = False # switch maze?
+    for i in range(EPISODES):
+        if total_ts >= TS_TRUNCATE:
+            break
+
+        if total_ts >= CHANGE_TS:
+            change = True
+        print("Staring Episode: ", i)
+        obs, _ = agent.reset()
+        cur_a = get_action(agent, Q, obs)
+        terminated = False
+        cur_s = obs
+        tmp_ts = 0
+
+        while not terminated:
+            # agent.render()
+            next_s, reward, terminated, truncated, _ = agent.step(cur_a, change)
+            next_a_val, next_a = get_max_action(Q, next_s)
+            Q[cur_s][cur_a] = Q[cur_s][cur_a] + ALPHA * (reward + GAMMA * next_a_val - Q[cur_s][cur_a])
+            history[tuple(cur_s)].append(cur_a)
+            ts_history[tuple(cur_s)][cur_a] = total_ts
+            model.update(cur_s, cur_a, reward, next_s)
+
+            # print("reward", reward, cur_s)
+            for j in range(N):
+                rand_s, rand_a, visited = get_random_state_action_plus(agent, history)
+                pred_r = 0
+                pred_s = rand_s
+                if visited: # has been visited
+                    pred_r, pred_s = model.predict(rand_s, rand_a)
+                # reward_q_plus = pred_r + k * math.sqrt(total_ts - ts_history[tuple(rand_s)][rand_a])
+                next_pred_a_val, _ = get_max_action_plus(Q, pred_s, ts_history, total_ts)
+                Q[rand_s][rand_a] = Q[rand_s][rand_a] + ALPHA * (reward_q_plus + GAMMA * next_pred_a_val - Q[rand_s][rand_a])
+
+            c_r += reward
+            cur_s = next_s
+            cur_a = next_a
+            total_ts += 1
+            tmp_ts += 1            
+        
+        c_r += tmp_ts
+        c_r -= 1
+        print("Total timestep consumed: ", total_ts, "reward: ", c_r)
+        cc2.append(total_ts)
+        rc2.append(c_r)
+
+    # print(total_ts)
+    # print(c_r)
+    print(len(cults_counts), len(reward_counts), len(rc))
+    get_reward_ts_plot(cc2, cc, rc2, rc)
 
